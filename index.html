@@ -409,8 +409,12 @@ function step() {
   if (processed >= allRows.length) { stopSim(); return; }
 
   const row = allRows[processed];
+  
+  // AQUÍ QUITÉ EL BLOQUE "if (rowTs > now)" QUE TE DABA ERROR
+  
   const label = row.timestamp.slice(11,16); 
   let worstStatus = 'ok';
+  let critSi = -1;
   let newPredictions = [];
 
   for (let si = 0; si < 8; si++) {
@@ -421,23 +425,21 @@ function step() {
     b.labels.push(label);
     b.vals.push(val);
 
-    // ANALISIS PREDICTIVO: Compara contra la historia (incluyendo la precarga)
-    const isPred = !predictedSensors.has(si) && isPredictiveTrigger(si);
-    if (isPred) {
-      const eta = estimateDaysToFail(si);
-      if (eta) {
-        predictedSensors.add(si);
-        newPredictions.push({si, s, val, eta});
-      }
-    }
-
     const isCrit = val <= s.cL || val >= s.cH;
     const isWarn = val <= s.wL || val >= s.wH;
     b.wa.push(isWarn && !isCrit ? val : null);
     b.ca.push(isCrit ? val : null);
+
+    // Análisis predictivo usando la historia precargada
+    const isPred = !predictedSensors.has(si) && isPredictiveTrigger(si);
+    const eta = isPred ? estimateDaysToFail(si) : null;
     if (b.pred) b.pred.push(isPred ? val : null);
 
-    // Actualización visual de las tarjetas
+    if (isPred && eta) {
+      predictedSensors.add(si);
+      newPredictions.push({si, s, val, eta});
+    }
+
     const ve = document.getElementById('cv'+si);
     const ce = document.getElementById('sc'+si);
     if (ve) {
@@ -447,22 +449,23 @@ function step() {
       if (ce) ce.className = 'card ' + (isCrit?'c':isWarn?'w':predictedSensors.has(si)?'pred':'');
     }
     
-    if (isCrit) worstStatus = 'c';
+    if (isCrit) { worstStatus = 'c'; critSi = si; }
     else if (isWarn && worstStatus !== 'c') worstStatus = 'w';
     else if (predictedSensors.size > 0 && worstStatus === 'ok') worstStatus = 'pred';
   }
 
   refreshChart();
-  if (typeof updateBadge === "function") updateBadge(worstStatus);
-  if (typeof updateAlerts === "function") updateAlerts(newPredictions, -1);
-  
+  updateBadge(worstStatus, critSi);
+  updateAlerts(newPredictions, critSi);
+  updateClock(); // Llamamos a la versión nueva de updateClock
+
   processed++;
   
-  // Actualización de progreso
-  const progFill = document.getElementById('pf');
-  if (progFill) progFill.style.width = (processed / allRows.length * 100) + '%';
-  const progLbl = document.getElementById('pl');
-  if (progLbl) progLbl.textContent = row.timestamp + ' — ' + Math.round(processed / allRows.length * 100) + '%';
+  // Barra de progreso
+  const pf = document.getElementById('pf');
+  if (pf) pf.style.width = Math.round(processed/allRows.length*100)+'%';
+  const pl = document.getElementById('pl');
+  if (pl) pl.textContent = row.timestamp + ' — ' + processed + ' lecturas';
 }
 
 function updateBadge(status, critSi) {
@@ -505,14 +508,11 @@ function updateAlerts(newPreds, critSi) {
 }
 
 function updateClock() {
-  const now = new Date();
-  document.getElementById('clk').textContent = 'Ahora: ' + now.toLocaleString('es-AR');
-  if (processed < allRows.length) {
-    const next = parseTS(allRows[processed].timestamp);
-    const diff = Math.max(0, Math.round((next-now)/1000));
-    const m = Math.floor(diff/60), s = diff%60;
-    document.getElementById('next-clk').textContent = `Próx. lectura en: ${m}m ${s}s`;
-  } else {
+  if (allRows.length > 0 && processed < allRows.length) {
+    const row = allRows[processed];
+    document.getElementById('clk').textContent = 'Reloj Simulación: ' + row.timestamp;
+    document.getElementById('next-clk').textContent = 'Simulación en curso...';
+  } else if (processed >= allRows.length && allRows.length > 0) {
     document.getElementById('next-clk').textContent = 'Simulación completada';
   }
 }
