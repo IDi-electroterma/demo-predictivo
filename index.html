@@ -256,6 +256,21 @@ function loadCSV(input) {
     
     buildChart();
 
+    //AGREGADO ANTO
+    for (let i = 0; i < 144 && i < allRows.length; i++) {
+        const row = allRows[processed];
+        for (let si = 0; si < 8; si++) {
+            const s = SENSORS[si];
+            const val = parseFloat(row[s.name]);
+            bufs[si].labels.push(row.timestamp.slice(11, 16));
+            bufs[si].vals.push(val);
+        }
+        processed++;
+    }
+    // Esto actualiza los textos para que no queden en 0 al cargar
+
+   //AGREGADO ANTO
+
     // PRECARGA DE 3 DÍAS (144 lecturas de 30 min)
     // Esto llena los buffers para que la IA tenga "memoria" desde el inicio
     for(let i=0; i < 144 && i < allRows.length; i++) {
