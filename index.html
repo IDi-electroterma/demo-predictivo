@@ -267,7 +267,12 @@ function loadCSV(input) {
         }
         processed++;
     }
+    refreshChart(); // Dibuja las líneas de los 3 días en el gráfico
+    updateClock();
+    
     // Esto actualiza los textos para que no queden en 0 al cargar
+    // Agregá esto al final de la precarga en loadCSV
+document.getElementById('pl').textContent = processed + " lecturas procesadas";
 
    //AGREGADO ANTO
 
