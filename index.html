@@ -250,11 +250,20 @@ function loadCSV(input) {
       csvHeaders.forEach((h,i) => obj[h] = cols[i]?.trim());
       return obj;
     });
+    
     document.getElementById('upload-box').style.display = 'none';
     document.getElementById('main').style.display = 'block';
+    
     buildChart();
-    findStartIdx();
-    addLog('normal', new Date().toLocaleString('es-AR'), `CSV cargado: ${allRows.length} lecturas (${allRows[0].timestamp} → ${allRows[allRows.length-1].timestamp})`);
+
+    // PRECARGA DE 3 DÍAS (144 lecturas de 30 min)
+    // Esto llena los buffers para que la IA tenga "memoria" desde el inicio
+    for(let i=0; i < 144 && i < allRows.length; i++) {
+        silentStep();
+    }
+    
+    if (typeof updateClock === "function") updateClock();
+    addLog('normal', new Date().toLocaleString(), "Historial de 72hs precargado. IA lista.");
   };
   reader.readAsText(file);
 }
@@ -370,102 +379,88 @@ function estimateDaysToFail(si) {
   }
 }
 
+// Funcion silenciosa agregada  
+function silentStep() {
+  if (processed >= allRows.length) return;
+  const row = allRows[processed];
+  
+  for (let si = 0; si < 8; si++) {
+    const s = SENSORS[si];
+    const val = parseFloat(row[s.name]);
+    const b = bufs[si];
+    if (!b.pred) b.pred = [];
+    
+    b.labels.push(row.timestamp.slice(11,16));
+    b.vals.push(val);
+    
+    // Guardamos estados de alerta en memoria
+    const isCrit = val <= s.cL || val >= s.cH;
+    const isWarn = val <= s.wL || val >= s.wH;
+    b.wa.push(isWarn && !isCrit ? val : null);
+    b.ca.push(isCrit ? val : null);
+    b.pred.push(null);
+  }
+  processed++;
+}
 // ── STEP ──────────────────────────────────────────────────────────────
 function step() {
   if (processed >= allRows.length) { stopSim(); return; }
 
-  // Check if this row's timestamp is <= now (real time mode)
   const row = allRows[processed];
-  const rowTs = parseTS(row.timestamp);
-  const now = new Date();
-  if (rowTs > now) {
-    // Not yet time — update clock and wait
-    updateClock();
-    return;
-  }
-
-  // Process this reading
-  const label = row.timestamp.slice(5,16).replace(' ',' ');
+  const label = row.timestamp.slice(11,16); 
   let worstStatus = 'ok';
-  let critSi = -1;
   let newPredictions = [];
 
   for (let si = 0; si < 8; si++) {
     const s = SENSORS[si];
     const val = parseFloat(row[s.name]);
     const b = bufs[si];
-    if (!b.pred) b.pred = [];
 
     b.labels.push(label);
     b.vals.push(val);
 
-    // Status
+    // ANALISIS PREDICTIVO: Compara contra la historia (incluyendo la precarga)
+    const isPred = !predictedSensors.has(si) && isPredictiveTrigger(si);
+    if (isPred) {
+      const eta = estimateDaysToFail(si);
+      if (eta) {
+        predictedSensors.add(si);
+        newPredictions.push({si, s, val, eta});
+      }
+    }
+
     const isCrit = val <= s.cL || val >= s.cH;
     const isWarn = val <= s.wL || val >= s.wH;
     b.wa.push(isWarn && !isCrit ? val : null);
     b.ca.push(isCrit ? val : null);
+    if (b.pred) b.pred.push(isPred ? val : null);
 
-    // Trend analysis
-    const isPred = !predictedSensors.has(si) && isPredictiveTrigger(si);
-    const eta = isPred ? estimateDaysToFail(si) : null;
-    b.pred.push(isPred ? val : null);
-
-    if (isPred && eta) {
-      predictedSensors.add(si);
-      newPredictions.push({si, s, val, eta});
-      b.pred[b.pred.length-1] = val;
-    }
-
-    // Update card
+    // Actualización visual de las tarjetas
     const ve = document.getElementById('cv'+si);
     const ce = document.getElementById('sc'+si);
-    const te = document.getElementById('ct'+si);
     if (ve) {
       const st = isCrit ? 'c' : isWarn ? 'w' : predictedSensors.has(si) ? 'pred' : 'ok';
       ve.textContent = val.toFixed(s.dec);
       ve.className = 'card-val ' + st;
-      ce.className = 'card ' + (isCrit?'c':isWarn?'w':predictedSensors.has(si)?'pred':'');
+      if (ce) ce.className = 'card ' + (isCrit?'c':isWarn?'w':predictedSensors.has(si)?'pred':'');
     }
-
-    // Trend indicator
-    if (te && b.vals.length >= TREND_WINDOW+1) {
-      const prev = b.vals[b.vals.length-1-TREND_WINDOW];
-      const diff = val - prev;
-      const perDay = diff;
-      if (Math.abs(perDay) < 0.1) { te.textContent='→ estable'; te.className='card-trend flat'; }
-      else if (perDay < 0) { te.textContent=`↓ ${Math.abs(perDay).toFixed(1)}/día`; te.className='card-trend drop'; }
-      else { te.textContent=`↑ ${perDay.toFixed(1)}/día`; te.className='card-trend rise'; }
-    }
-
-    if (isCrit && critSi < 0) { worstStatus='c'; critSi=si; }
-    else if (isWarn && worstStatus!=='c') worstStatus='w';
-    if (predictedSensors.size>0 && worstStatus==='ok') worstStatus='pred';
+    
+    if (isCrit) worstStatus = 'c';
+    else if (isWarn && worstStatus !== 'c') worstStatus = 'w';
+    else if (predictedSensors.size > 0 && worstStatus === 'ok') worstStatus = 'pred';
   }
 
   refreshChart();
-  updateBadge(worstStatus, critSi);
-  updateAlerts(newPredictions, critSi);
-
-  // Log
-  if (newPredictions.length > 0) {
-    newPredictions.forEach(p => {
-      addLog('pred', row.timestamp, `ALERTA PREDICTIVA — ${p.s.label}: tendencia ${p.eta.slope}/día. Crítico estimado en ${p.eta.toCrit} días`);
-    });
-  } else if (critSi >= 0 && !critSensors.has(critSi)) {
-    critSensors.add(critSi);
-    addLog('crit', row.timestamp, `CRÍTICO — ${SENSORS[critSi].label}: ${parseFloat(row[SENSORS[critSi].name]).toFixed(SENSORS[critSi].dec)} ${SENSORS[critSi].unit}`);
-  } else if (processed % 24 === 0) {
-    addLog('normal', row.timestamp, 'Sistema normal');
-  }
-
-  // Progress
-  const pct = Math.round((processed+1)/allRows.length*100);
-  document.getElementById('pf').style.width = pct+'%';
-  document.getElementById('pl').textContent = row.timestamp + ' — ' + pct + '%';
-  document.getElementById('read-count').textContent = (processed+1) + ' lecturas procesadas';
-
+  if (typeof updateBadge === "function") updateBadge(worstStatus);
+  if (typeof updateAlerts === "function") updateAlerts(newPredictions, -1);
+  
   processed++;
-  updateClock();
+  
+  // Actualización de progreso
+  const progFill = document.getElementById('pf');
+  if (progFill) progFill.style.width = (processed / allRows.length * 100) + '%';
+  const progLbl = document.getElementById('pl');
+  if (progLbl) progLbl.textContent = row.timestamp + ' — ' + Math.round(processed / allRows.length * 100) + '%';
 }
 
 function updateBadge(status, critSi) {
