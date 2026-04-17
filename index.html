@@ -409,12 +409,8 @@ function step() {
   if (processed >= allRows.length) { stopSim(); return; }
 
   const row = allRows[processed];
-  
-  // AQUÍ QUITÉ EL BLOQUE "if (rowTs > now)" QUE TE DABA ERROR
-  
   const label = row.timestamp.slice(11,16); 
   let worstStatus = 'ok';
-  let critSi = -1;
   let newPredictions = [];
 
   for (let si = 0; si < 8; si++) {
@@ -425,21 +421,24 @@ function step() {
     b.labels.push(label);
     b.vals.push(val);
 
+    // Análisis predictivo
+    const isPred = !predictedSensors.has(si) && isPredictiveTrigger(si);
+    if (b.pred) b.pred.push(isPred ? val : null);
+
+    if (isPred) {
+      const eta = estimateDaysToFail(si);
+      if (eta) {
+        predictedSensors.add(si);
+        addLog('warn', row.timestamp, `PREDICCIÓN: ${s.label} fallará en ${eta} días.`);
+      }
+    }
+
     const isCrit = val <= s.cL || val >= s.cH;
     const isWarn = val <= s.wL || val >= s.wH;
     b.wa.push(isWarn && !isCrit ? val : null);
     b.ca.push(isCrit ? val : null);
 
-    // Análisis predictivo usando la historia precargada
-    const isPred = !predictedSensors.has(si) && isPredictiveTrigger(si);
-    const eta = isPred ? estimateDaysToFail(si) : null;
-    if (b.pred) b.pred.push(isPred ? val : null);
-
-    if (isPred && eta) {
-      predictedSensors.add(si);
-      newPredictions.push({si, s, val, eta});
-    }
-
+    // Actualización de tarjetas
     const ve = document.getElementById('cv'+si);
     const ce = document.getElementById('sc'+si);
     if (ve) {
@@ -449,23 +448,28 @@ function step() {
       if (ce) ce.className = 'card ' + (isCrit?'c':isWarn?'w':predictedSensors.has(si)?'pred':'');
     }
     
-    if (isCrit) { worstStatus = 'c'; critSi = si; }
+    if (isCrit) worstStatus = 'c';
     else if (isWarn && worstStatus !== 'c') worstStatus = 'w';
-    else if (predictedSensors.size > 0 && worstStatus === 'ok') worstStatus = 'pred';
+    else if (predictedSensors.has(si) && worstStatus === 'ok') worstStatus = 'pred';
   }
 
   refreshChart();
-  updateBadge(worstStatus, critSi);
-  updateAlerts(newPredictions, critSi);
-  updateClock(); // Llamamos a la versión nueva de updateClock
+  
+  // Actualizar el Badge principal
+  const sb = document.getElementById('sbadge');
+  if (sb) {
+    sb.className = 'badge ' + worstStatus;
+    sb.textContent = worstStatus === 'c' ? '● ALERTA CRÍTICA' : 
+                     worstStatus === 'w' ? '● PRECAUCIÓN' : 
+                     worstStatus === 'pred' ? '● MANTENIMIENTO REQUERIDO' : '● SISTEMA NORMAL';
+  }
 
+  updateClock();
   processed++;
   
   // Barra de progreso
   const pf = document.getElementById('pf');
   if (pf) pf.style.width = Math.round(processed/allRows.length*100)+'%';
-  const pl = document.getElementById('pl');
-  if (pl) pl.textContent = row.timestamp + ' — ' + processed + ' lecturas';
 }
 
 function updateBadge(status, critSi) {
@@ -511,7 +515,7 @@ function updateClock() {
   if (allRows.length > 0 && processed < allRows.length) {
     const row = allRows[processed];
     document.getElementById('clk').textContent = 'Reloj Simulación: ' + row.timestamp;
-    document.getElementById('next-clk').textContent = 'Simulación en curso...';
+    document.getElementById('next-clk').textContent = 'Procesando historial...';
   } else if (processed >= allRows.length && allRows.length > 0) {
     document.getElementById('next-clk').textContent = 'Simulación completada';
   }
