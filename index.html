@@ -81,6 +81,13 @@ footer{text-align:center;font-size:11px;color:var(--text3);margin-top:20px;paddi
 <div class="upload-box" id="upload-box">
   <p id="upload-msg">Cargando datos del sistema...</p>
   <div id="upload-detail" style="margin-top:6px;font-size:11px;color:var(--text3)">Buscando CSV en el repositorio</div>
+  <div style="margin-top:14px;padding-top:14px;border-top:.5px solid var(--border)">
+    <span style="font-size:11px;color:var(--text3)">O cargá un CSV desde tu computadora:</span><br>
+    <label class="btn primary" style="cursor:pointer;display:inline-block;margin-top:8px">
+      Seleccionar CSV manualmente
+      <input type="file" accept=".csv" onchange="manualLoad(this)" style="display:none">
+    </label>
+  </div>
 </div>
 
 <div id="main" style="display:none">
