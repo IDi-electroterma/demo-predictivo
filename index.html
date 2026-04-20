@@ -405,24 +405,9 @@ function getIntervalMs(){return Math.max(200,Math.round(5000/speed));}
 
 function startSim(){
   if(running||!allRows.length)return;
-  // Buscar en el CSV el índice más cercano a la hora real actual
-  const nowMs=Date.now();
-  const csvStart=csvMs(allRows[0].timestamp);
-  const csvEnd=csvMs(allRows[allRows.length-1].timestamp);
-  if(nowMs>=csvStart&&nowMs<=csvEnd){
-    // La hora actual cae dentro del rango del CSV → buscar fila más cercana
-    let bestIdx=startIdx;
-    for(let i=startIdx;i<allRows.length;i++){
-      if(csvMs(allRows[i].timestamp)<=nowMs) bestIdx=i;
-      else break;
-    }
-    // Procesar silenciosamente las filas entre startIdx y bestIdx (historial reciente)
-    while(processed<=bestIdx) silentStep();
-    startIdx=processed;
-    refreshChart();
-  }
-  // Anclar: tiempo real actual = timestamp CSV de la fila actual
-  simStartRealMs=nowMs;
+  // Arrancar siempre desde donde terminó la precarga de 3 días.
+  // El CSV puede tener cualquier fecha — el reloj real avanza desde ahora.
+  simStartRealMs=Date.now();
   simStartCsvMs=csvMs(allRows[Math.min(processed,allRows.length-1)].timestamp);
   running=true;
   document.getElementById('bplay').disabled=true;
