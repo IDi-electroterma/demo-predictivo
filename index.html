@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MVP Predictivo — Sistema de Calderas</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+:root{--bg:#ffffff;--bg2:#f5f5f3;--bg3:#eeeae0;--text:#1a1a18;--text2:#6b6b65;--text3:#9b9b95;--border:rgba(0,0,0,.12);--red-bg:#FCEBEB;--red-t:#A32D2D;--red-b:#E24B4A;--amb-bg:#FAEEDA;--amb-t:#854F0B;--amb-b:#EF9F27;--grn-bg:#EAF3DE;--grn-t:#3B6D11;--blue:#185FA5;--blue-light:#E6F1FB;}
+@media(prefers-color-scheme:dark){:root{--bg:#1c1c1a;--bg2:#252523;--bg3:#2e2e2b;--text:#f0ede8;--text2:#a8a8a2;--text3:#6e6e68;--border:rgba(255,255,255,.12);--red-bg:#2e0e0e;--red-t:#f07070;--red-b:#f07070;--amb-bg:#2e1f05;--amb-t:#e8a030;--amb-b:#e8a030;--grn-bg:#17300a;--grn-t:#7ec444;--blue-light:#0c2a4a;}}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:13px;background:var(--bg3);color:var(--text)}
+.page{max-width:980px;margin:0 auto;padding:20px 16px}
+.hdr{display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:16px}
+.hdr-left h1{font-size:17px;font-weight:600}
+.hdr-left p{font-size:11px;color:var(--text2);margin-top:3px}
+.badge{font-size:11px;font-weight:600;padding:5px 14px;border-radius:20px;white-space:nowrap}
+.badge.ok{background:var(--grn-bg);color:var(--grn-t)}.badge.w{background:var(--amb-bg);color:var(--amb-t)}.badge.c{background:var(--red-bg);color:var(--red-t)}.badge.pred{background:var(--blue-light);color:var(--blue)}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}.pulse{animation:pulse 1.2s infinite}
+.status-row{display:flex;gap:8px;align-items:center;margin-bottom:14px;flex-wrap:wrap}
+.clock{font-size:12px;color:var(--text2);background:var(--bg);border:.5px solid var(--border);border-radius:6px;padding:5px 12px}
+.cards{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px}
+@media(max-width:600px){.cards{grid-template-columns:repeat(2,1fr)}}
+.card{background:var(--bg);border-radius:8px;padding:10px 12px;border:1.5px solid transparent;transition:border-color .2s}
+.card.w{border-color:var(--amb-b)}.card.c{border-color:var(--red-b)}.card.pred{border-color:var(--blue)}
+.card-lbl{font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px}
+.card-val{font-size:20px;font-weight:600;color:var(--text)}
+.card-val.ok{color:var(--grn-t)}.card-val.w{color:var(--amb-t)}.card-val.c{color:var(--red-t)}.card-val.pred{color:var(--blue)}
+.card-unit{font-size:10px;color:var(--text3);margin-top:2px}
+.card-trend{font-size:10px;margin-top:3px}
+.card-trend.drop{color:var(--red-t)}.card-trend.rise{color:var(--amb-t)}.card-trend.flat{color:var(--grn-t)}
+.pred-alert{border-radius:8px;padding:14px 16px;margin-bottom:12px;display:none;border:2px solid var(--blue);background:var(--blue-light)}
+.pred-alert.show{display:block}
+.pred-title{font-size:14px;font-weight:600;color:var(--blue);margin-bottom:6px}
+.pred-body{font-size:12px;line-height:1.6;color:var(--blue)}
+.pred-items{margin-top:8px;display:flex;flex-direction:column;gap:6px}
+.pred-item{background:var(--bg);border-radius:6px;padding:8px 12px;font-size:12px;border-left:3px solid var(--blue)}
+.pred-item .pi-sensor{font-weight:600;color:var(--blue)}
+.pred-item .pi-detail{color:var(--text2);margin-top:2px}
+.pred-item .pi-saving{color:var(--grn-t);font-weight:600;margin-top:2px}
+.crit-alert{border-radius:8px;padding:12px 15px;margin-bottom:12px;display:none;border:1.5px solid var(--red-b);background:var(--red-bg)}
+.crit-alert.show{display:block}
+.crit-title{font-size:13px;font-weight:600;color:var(--red-t);margin-bottom:4px}
+.crit-body{font-size:12px;color:var(--red-t);line-height:1.5}
+.panel{background:var(--bg);border-radius:12px;border:.5px solid var(--border);padding:15px;margin-bottom:12px}
+.tabs{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:10px}
+.tab{padding:4px 11px;font-size:11px;font-weight:500;border-radius:20px;border:.5px solid var(--border);background:transparent;color:var(--text2);cursor:pointer}
+.tab.on{background:var(--blue);color:var(--blue-light);border-color:var(--blue)}
+.chart-wrap{position:relative;height:200px}
+.log-panel{background:var(--bg);border-radius:8px;border:.5px solid var(--border);padding:10px 14px;margin-bottom:12px}
+.log-title{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--text3);margin-bottom:8px}
+.log-list{max-height:120px;overflow-y:auto;display:flex;flex-direction:column;gap:3px}
+.log-entry{font-size:11px;padding:3px 0;border-bottom:.5px solid var(--border);color:var(--text2);display:flex;gap:8px}
+.log-entry:last-child{border:none}
+.log-entry .le-ts{color:var(--text3);min-width:115px;flex-shrink:0}
+.log-entry.pred{color:var(--blue);font-weight:500}.log-entry.pred .le-ts{color:var(--blue)}
+.log-entry.crit{color:var(--red-t);font-weight:500}
+.controls{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px}
+.btn{padding:7px 16px;font-size:12px;font-weight:500;border:.5px solid var(--border);border-radius:8px;background:transparent;color:var(--text);cursor:pointer}
+.btn:hover{background:var(--bg2)}.btn.primary{background:var(--blue);color:var(--blue-light);border-color:var(--blue)}.btn.primary:hover{background:#0C447C}.btn:disabled{opacity:.35;cursor:default}
+.spd-lbl{font-size:11px;color:var(--text2)}
+.prog-row{display:flex;gap:10px;align-items:center;margin-bottom:10px}
+.prog-bar{flex:1;height:3px;background:var(--bg2);border-radius:2px;overflow:hidden}
+.prog-fill{height:100%;background:var(--blue);border-radius:2px;transition:width .2s}
+.prog-lbl{font-size:11px;color:var(--text2);min-width:160px;text-align:right}
+.upload-box{background:var(--bg);border:2px dashed var(--border);border-radius:10px;padding:28px;text-align:center;margin-bottom:14px}
+.upload-box p{font-size:13px;color:var(--text2);margin-bottom:10px}
+footer{text-align:center;font-size:11px;color:var(--text3);margin-top:20px;padding-top:14px;border-top:.5px solid var(--border)}
+</style>
+</head>
+<body>
+<div class="page">
+<div class="hdr">
+  <div class="hdr-left">
+    <h1>MVP Predictivo — Sistema de Calderas</h1>
+    <p>Algoritmo: pendiente &gt;0.3/día × 3 días consecutivos · Anticipación media: 5.5 días</p>
+  </div>
+  <div class="badge ok" id="sbadge">● SISTEMA NORMAL</div>
+</div>
+
+<div class="upload-box" id="upload-box">
+  <p id="upload-msg">Cargando datos del sistema...</p>
+  <div id="upload-detail" style="margin-top:6px;font-size:11px;color:var(--text3)">Buscando CSV en el repositorio</div>
+</div>
+
+<div id="main" style="display:none">
+  <div class="status-row">
+    <div class="clock" id="clk-sim">Lectura actual: —</div>
+    <div class="clock" id="clk-next">Próxima lectura: —</div>
+    <div class="clock" id="clk-count">0 lecturas procesadas</div>
+  </div>
+  <!-- EDIT ANTO
+  <div class="pred-alert" id="pred-alert">
+    <div class="pred-title">🔮 ALERTA PREDICTIVA — Intervención recomendada</div>
+    <div class="pred-body">El algoritmo detectó tendencia sostenida. Falla estimada en <strong id="pred-days">—</strong> días si no se interviene.</div>
+    <div class="pred-items" id="pred-items"></div>
+  </div>
+  -->
+  <div class="crit-alert" id="crit-alert">
+    <div class="crit-title" id="crit-title">⚠ Anomalía crítica</div>
+    <div class="crit-body" id="crit-body">—</div>
+  </div>
+  <div class="cards">
+    <div class="card" id="sc0"><div class="card-lbl">Caldera 1 — Presión</div><div class="card-val" id="cv0">—</div><div class="card-unit">bar</div><div class="card-trend" id="ct0"></div></div>
+    <div class="card" id="sc1"><div class="card-lbl">Caldera 2 — Presión</div><div class="card-val" id="cv1">—</div><div class="card-unit">bar</div><div class="card-trend" id="ct1"></div></div>
+    <div class="card" id="sc2"><div class="card-lbl">Lavadero 1 — Temp</div><div class="card-val" id="cv2">—</div><div class="card-unit">°C</div><div class="card-trend" id="ct2"></div></div>
+    <div class="card" id="sc3"><div class="card-lbl">Lavadero 2 — Temp</div><div class="card-val" id="cv3">—</div><div class="card-unit">°C</div><div class="card-trend" id="ct3"></div></div>
+    <div class="card" id="sc4"><div class="card-lbl">Torre 1 — Temp</div><div class="card-val" id="cv4">—</div><div class="card-unit">°C</div><div class="card-trend" id="ct4"></div></div>
+    <div class="card" id="sc5"><div class="card-lbl">Torre 2 — Temp</div><div class="card-val" id="cv5">—</div><div class="card-unit">°C</div><div class="card-trend" id="ct5"></div></div>
+    <div class="card" id="sc6"><div class="card-lbl">Torre 3 — Temp</div><div class="card-val" id="cv6">—</div><div class="card-unit">°C</div><div class="card-trend" id="ct6"></div></div>
+    <div class="card" id="sc7"><div class="card-lbl">Torre 4 — Temp</div><div class="card-val" id="cv7">—</div><div class="card-unit">°C</div><div class="card-trend" id="ct7"></div></div>
+  </div>
+  <div class="panel">
+    <div class="tabs">
+      <button class="tab on" onclick="setTab(0)">Presión C1</button>
+      <button class="tab" onclick="setTab(1)">Presión C2</button>
+      <button class="tab" onclick="setTab(2)">Lavadero 1</button>
+      <button class="tab" onclick="setTab(3)">Lavadero 2</button>
+      <button class="tab" onclick="setTab(4)">Torre 1</button>
+      <button class="tab" onclick="setTab(5)">Torre 2</button>
+      <button class="tab" onclick="setTab(6)">Torre 3</button>
+      <button class="tab" onclick="setTab(7)">Torre 4</button>
+    </div>
+    <div class="chart-wrap"><canvas id="ch"></canvas></div>
+  </div>
+  <div class="log-panel">
+    <div class="log-title">Registro de eventos</div>
+    <div class="log-list" id="log-list"><div style="font-size:11px;color:var(--text3)">Esperando inicio...</div></div>
+  </div>
+  <div class="controls">
+    <button class="btn primary" id="bplay" onclick="startSim()">▶ Iniciar</button>
+    <button class="btn" id="bpause" onclick="pauseSim()" disabled>⏸ Pausar</button>
+    <button class="btn" id="breset" onclick="resetSim()">↺ Reiniciar</button>
+    <span class="spd-lbl">Velocidad:</span>
+    <input type="range" min="1" max="8" value="3" id="sld" style="width:80px;accent-color:var(--blue)" oninput="chSpd(this.value)">
+    <span class="spd-lbl" id="sv">3x</span>
+  </div>
+  <div class="prog-row">
+    <div class="prog-bar"><div class="prog-fill" id="pf" style="width:0%"></div></div>
+    <div class="prog-lbl" id="pl">Esperando inicio...</div>
+  </div>
+</div>
+
+<footer>MVP Predictivo · Datos sintéticos · IDi-Electroterma · El CSV puede tener cualquier fecha</footer>
+</div>
+
+<script>
+const SENSORS=[
+  {name:'Presion_C1',label:'Presión C1',unit:'bar',dec:2,wL:2.2,cL:1.8,wH:3.5,cH:5.0,dir:'any'},
+  {name:'Presion_C2',label:'Presión C2',unit:'bar',dec:2,wL:2.2,cL:1.8,wH:3.5,cH:5.0,dir:'any'},
+  {name:'Lavadero_1',label:'Lavadero 1',unit:'°C', dec:1,wL:47.0,cL:45.5,wH:53,cH:54,dir:'drop'},
+  {name:'Lavadero_2',label:'Lavadero 2',unit:'°C', dec:1,wL:45,cL:35,wH:56,cH:58,   dir:'drop'},
+  {name:'Torre_1',   label:'Torre 1',   unit:'°C', dec:1,wL:44,cL:41,wH:57,cH:58.5, dir:'drop'},
+  {name:'Torre_2',   label:'Torre 2',   unit:'°C', dec:1,wL:43,cL:39,wH:55.5,cH:57, dir:'drop'},
+  {name:'Torre_3',   label:'Torre 3',   unit:'°C', dec:1,wL:43,cL:40,wH:57,cH:59,   dir:'drop'},
+  {name:'Torre_4',   label:'Torre 4',   unit:'°C', dec:1,wL:44,cL:41.5,wH:57,cH:60, dir:'drop'},
+];
+const SAVINGS={Presion_C1:4597749,Presion_C2:12857048,Lavadero_1:2295144,Lavadero_2:1861188,Torre_1:17372672,Torre_2:17372672,Torre_3:7145208,Torre_4:5720341};
+const TREND_DAYS=3, SLOPE_THRESH=0.3, DISP=96;
+
+let allRows=[], READINGS_PER_DAY=48;
+let simStartRealMs=null, simStartCsvMs=null, startIdx=0;
+let processed=0, speed=3;
+let chart, interval, running=false, activeTab=0;
+let bufs=Array.from({length:8},()=>({labels:[],vals:[],wa:[],ca:[],pr:[]}));
+let predictedSensors=new Set(), critSensors=new Set();
+
+function csvMs(ts){ return new Date(ts.replace(' ','T')+':00').getTime(); }
+
+// ── CSV ───────────────────────────────────────────────────────────────
+function parseCSVText(text){
+  const lines=text.trim().split(/\r?\n/);
+  const headers=lines[0].split(',').map(h=>h.trim());
+  allRows=lines.slice(1).filter(l=>l.trim()).map(line=>{
+    const cols=line.split(','), obj={};
+    headers.forEach((h,i)=>obj[h]=(cols[i]||'').trim());
+    return obj;
+  });
+  if(allRows.length>=2){
+    const diff=(csvMs(allRows[1].timestamp)-csvMs(allRows[0].timestamp))/60000;
+    READINGS_PER_DAY=Math.round(1440/diff);
+  }
+  // Precargar 3 días en silencio para que el algoritmo tenga memoria
+  const preload=Math.min(READINGS_PER_DAY*TREND_DAYS, allRows.length-1);
+  for(let i=0;i<preload;i++) silentStep();
+  startIdx=processed;
+
+  document.getElementById('upload-box').style.display='none';
+  document.getElementById('main').style.display='block';
+  buildChart(); refreshChart(); updateStatusBar();
+  addLog('normal', allRows[preload-1].timestamp,
+    `Historial de ${TREND_DAYS} días precargado (${preload} lecturas · intervalo ${Math.round(1440/READINGS_PER_DAY)} min). Sistema listo.`);
+}
+
+function autoLoadCSV(){
+  const base=window.location.href.replace(/[?#].*$/,'').replace(/\/[^/]*$/,'/');
+  const url=base+'mvp_simulacion_14dias.csv';
+  document.getElementById('upload-detail').textContent='Descargando: '+url;
+  fetch(url)
+    .then(r=>{if(!r.ok)throw new Error('HTTP '+r.status);return r.text();})
+    .then(parseCSVText)
+    .catch(err=>{
+      document.getElementById('upload-msg').textContent='No se pudo cargar automáticamente.';
+      document.getElementById('upload-detail').innerHTML=
+        `Error: ${err.message}<br><br>`+
+        `<label class="btn primary" style="cursor:pointer;display:inline-block;margin-top:8px">`+
+        `Seleccionar CSV manualmente`+
+        `<input type="file" accept=".csv" onchange="manualLoad(this)" style="display:none"></label>`;
+    });
+}
+function manualLoad(input){
+  const file=input.files[0]; if(!file)return;
+  const r=new FileReader();
+  r.onload=e=>parseCSVText(e.target.result);
+  r.readAsText(file);
+}
+window.addEventListener('DOMContentLoaded',autoLoadCSV);
+
+// ── PRECARGA SILENCIOSA ───────────────────────────────────────────────
+function silentStep(){
+  if(processed>=allRows.length)return;
+  const row=allRows[processed], label=row.timestamp.slice(5,16);
+  for(let si=0;si<8;si++){
+    const val=parseFloat(row[SENSORS[si].name]);
+    if(isNaN(val))continue;
+    const b=bufs[si], s=SENSORS[si];
+    b.labels.push(label); b.vals.push(val);
+    const isCrit=val<=s.cL||val>=s.cH, isWarn=!isCrit&&(val<=s.wL||val>=s.wH);
+    b.wa.push(isWarn?val:null); b.ca.push(isCrit?val:null); b.pr.push(null);
+  }
+  processed++;
+}
+
+// ── CHART ─────────────────────────────────────────────────────────────
+function buildChart(){
+  const ctx=document.getElementById('ch').getContext('2d');
+  chart=new Chart(ctx,{type:'line',data:{labels:[],datasets:[
+    {label:'Valor',      data:[],borderColor:'#185FA5',backgroundColor:'rgba(24,95,165,.08)',borderWidth:2,pointRadius:0,tension:.3,fill:true},
+    {label:'Lím. advert.',data:[],borderColor:'#EF9F27',borderWidth:1.5,borderDash:[5,3],pointRadius:0,fill:false},
+    {label:'Lím. crítico',data:[],borderColor:'#E24B4A',borderWidth:1,borderDash:[3,3],pointRadius:0,fill:false},
+    {label:'Advertencia', data:[],borderColor:'transparent',backgroundColor:'#EF9F27',pointRadius:5,showLine:false},
+    {label:'Crítico',     data:[],borderColor:'transparent',backgroundColor:'#E24B4A',pointRadius:6,showLine:false},
+    {label:'Pred. alerta',data:[],borderColor:'transparent',backgroundColor:'#185FA5',pointRadius:7,pointStyle:'triangle',showLine:false},
+  ]},options:{responsive:true,maintainAspectRatio:false,animation:{duration:60},
+    plugins:{legend:{labels:{font:{size:11},boxWidth:12}}},
+    scales:{x:{ticks:{maxTicksLimit:7,font:{size:10},color:'#888780',maxRotation:0},grid:{color:'rgba(136,135,128,.1)'}},
+            y:{ticks:{font:{size:10},color:'#888780'},grid:{color:'rgba(136,135,128,.1)'}}}}});
+}
+function setTab(t){activeTab=t;document.querySelectorAll('.tab').forEach((el,i)=>el.classList.toggle('on',i===t));refreshChart();}
+function refreshChart(){
+  const b=bufs[activeTab],s=SENSORS[activeTab],sl=b.labels.slice(-DISP);
+  chart.data.labels=sl;
+  chart.data.datasets[0].data=b.vals.slice(-DISP);
+  chart.data.datasets[1].data=Array(sl.length).fill(s.wL);
+  chart.data.datasets[2].data=Array(sl.length).fill(s.cL);
+  chart.data.datasets[3].data=b.wa.slice(-DISP);
+  chart.data.datasets[4].data=b.ca.slice(-DISP);
+  chart.data.datasets[5].data=b.pr.slice(-DISP);
+  chart.options.scales.y.min=s.cL-(s.unit==='bar'?0.5:5);
+  chart.options.scales.y.max=s.cH+(s.unit==='bar'?0.5:5);
+  chart.update('none');
+}
+
+// ── TENDENCIA ─────────────────────────────────────────────────────────
+function calcSlopes(si){
+  const b=bufs[si], n=b.vals.length;
+  if(n<READINGS_PER_DAY*TREND_DAYS+1)return null;
+  const slopes=[];
+  for(let d=0;d<TREND_DAYS;d++){
+    const v1=b.vals[n-1-d*READINGS_PER_DAY], v2=b.vals[n-1-(d+1)*READINGS_PER_DAY];
+    if(v1==null||v2==null)return null;
+    slopes.push(v1-v2);
+  }
+  return slopes;
+}
+function isPred(si){
+  const s=SENSORS[si], sl=calcSlopes(si);
+  if(!sl)return false;
+  if(s.dir==='drop')return sl.every(x=>x<-SLOPE_THRESH);
+  if(s.dir==='rise')return sl.every(x=>x>SLOPE_THRESH);
+  return sl.every(x=>x<-SLOPE_THRESH)||sl.every(x=>x>SLOPE_THRESH);
+}
+function eta(si){
+  const s=SENSORS[si], b=bufs[si], sl=calcSlopes(si);
+  if(!sl||!b.vals.length)return null;
+  const avg=sl.reduce((a,x)=>a+x,0)/sl.length;
+  if(avg===0)return null;
+  const cur=b.vals[b.vals.length-1];
+  if(avg<0)return{toCrit:Math.max(0,(s.cL-cur)/avg).toFixed(1),toWarn:Math.max(0,(s.wL-cur)/avg).toFixed(1),slope:avg.toFixed(2),cur};
+  return{toCrit:Math.max(0,(s.cH-cur)/avg).toFixed(1),toWarn:Math.max(0,(s.wH-cur)/avg).toFixed(1),slope:'+'+avg.toFixed(2),cur};
+}
+
+// ── STEP ──────────────────────────────────────────────────────────────
+// calcula qué fila del CSV debería estar visible ahora según tiempo real + velocidad
+function targetIdx(){
+  if(simStartRealMs===null)return startIdx;
+  const realElapsed=Date.now()-simStartRealMs;
+  const csvElapsed=realElapsed*speed;
+  const targetMs=simStartCsvMs+csvElapsed;
+  for(let i=startIdx;i<allRows.length;i++){
+    if(csvMs(allRows[i].timestamp)>=targetMs)return i;
+  }
+  return allRows.length;
+}
+
+function step(){
+  const tgt=targetIdx();
+  if(processed>=allRows.length){stopSim();return;}
+  if(processed>=tgt){updateStatusBar();return;}
+
+  while(processed<tgt&&processed<allRows.length){
+    processRow(allRows[processed]);
+    processed++;
+  }
+  refreshChart(); updateStatusBar();
+  if(processed>=allRows.length)stopSim();
+}
+
+function processRow(row){
+  const label=row.timestamp.slice(5,16);
+  let worstSt='ok', critSi=-1;
+
+  for(let si=0;si<8;si++){
+    const s=SENSORS[si], val=parseFloat(row[s.name]);
+    if(isNaN(val))continue;
+    const b=bufs[si];
+    b.labels.push(label); b.vals.push(val);
+    const isCrit=val<=s.cL||val>=s.cH, isWarn=!isCrit&&(val<=s.wL||val>=s.wH);
+    b.wa.push(isWarn?val:null); b.ca.push(isCrit?val:null);
+
+    // Alerta predictiva — solo una vez por sensor
+    if(!predictedSensors.has(si)&&isPred(si)){
+      const e=eta(si);
+      if(e){
+        predictedSensors.add(si); b.pr.push(val);
+        // FIX: e.toCrit es string con el número, no el objeto
+        //AGREGADO
+        addLog('pred',row.timestamp,
+  `ALERTA PREDICTIVA — ${s.label} · Tendencia: ${e.slope} ${s.unit}/día · Falla estimada en ~${e.toCrit} días`);
+        //FIN
+        /* EDIT ANTO
+        addLog('pred',row.timestamp,
+          `ALERTA PREDICTIVA — ${s.label}: ${e.slope} ${s.unit}/día · crítico en ~${e.toCrit} días · ahorro ARS ${SAVINGS[s.name].toLocaleString('es-AR')}`);
+        */
+/* EDIT ANTO
+        document.getElementById('pred-alert').classList.add('show');
+        const pd=document.getElementById('pred-days');
+        if(!pd.dataset.min||parseFloat(e.toCrit)<parseFloat(pd.dataset.min)){pd.textContent=e.toCrit;pd.dataset.min=e.toCrit;}
+        const div=document.createElement('div'); div.className='pred-item';
+        div.innerHTML=`<div class="pi-sensor">${s.label}</div>`+
+          `<div class="pi-detail">Tendencia: ${e.slope} ${s.unit}/día · Valor actual: ${parseFloat(e.cur).toFixed(s.dec)} ${s.unit} · Advertencia en ~${e.toWarn} días · Crítico en ~${e.toCrit} días</div>`+
+          `<div class="pi-saving">Ahorro estimado actuando ahora: ARS ${SAVINGS[s.name].toLocaleString('es-AR')}</div>`;
+        document.getElementById('pred-items').appendChild(div);
+*/
+      } else b.pr.push(null);
+    } else b.pr.push(null);
+
+    // Crítico — solo una vez por sensor
+    if(isCrit&&!critSensors.has(si)){
+      critSensors.add(si);
+      /*REEMPLAZO ANTO
+      addLog('crit',row.timestamp,`CRÍTICO — ${s.label}: ${val.toFixed(s.dec)} ${s.unit}`);
+      */
+      //POR ESTE
+      addLog('crit',row.timestamp,`ANOMALÍA CRÍTICA — ${s.label}: valor ${val.toFixed(s.dec)} ${s.unit} fuera del rango de seguridad`);
+      // FIN
+      document.getElementById('crit-alert').classList.add('show');
+      document.getElementById('crit-title').textContent='⚠ Anomalía crítica — '+s.label;
+      document.getElementById('crit-body').textContent=row.timestamp+': valor '+val.toFixed(s.dec)+' '+s.unit+' fuera del rango de seguridad.';
+    }
+
+    // Cards
+    const st=isCrit?'c':isWarn?'w':predictedSensors.has(si)?'pred':'ok';
+    const ve=document.getElementById('cv'+si), ce=document.getElementById('sc'+si), te=document.getElementById('ct'+si);
+    if(ve){ve.textContent=val.toFixed(s.dec);ve.className='card-val '+st;}
+    if(ce){ce.className='card '+(isCrit?'c':isWarn?'w':predictedSensors.has(si)?'pred':'');}
+    if(te&&b.vals.length>READINGS_PER_DAY){
+      const prev=b.vals[b.vals.length-1-READINGS_PER_DAY], d=val-prev;
+      if(Math.abs(d)<0.1){te.textContent='→ estable';te.className='card-trend flat';}
+      else if(d<0){te.textContent=`↓ ${Math.abs(d).toFixed(1)}/día`;te.className='card-trend drop';}
+      else{te.textContent=`↑ ${d.toFixed(1)}/día`;te.className='card-trend rise';}
+    }
+    if(isCrit&&critSi<0){worstSt='c';critSi=si;}
+    else if(isWarn&&worstSt==='ok')worstSt='w';
+  }
+  if(predictedSensors.size>0&&worstSt==='ok')worstSt='pred';
+
+  const bd=document.getElementById('sbadge');
+  if(worstSt==='c'){bd.className='badge c';bd.innerHTML='<span class="pulse">●</span> ANOMALÍA CRÍTICA';}
+  else if(worstSt==='pred'){bd.className='badge pred';bd.innerHTML='<span class="pulse">●</span> ALERTA PREDICTIVA';}
+  else if(worstSt==='w'){bd.className='badge w';bd.textContent='▲ ADVERTENCIA';}
+  else{bd.className='badge ok';bd.textContent='● SISTEMA NORMAL';}
+}
+
+// ── STATUS BAR ────────────────────────────────────────────────────────
+function updateStatusBar(){
+  const n=processed-startIdx;
+  const total=allRows.length-startIdx;
+  const cur=allRows[Math.min(processed-1,allRows.length-1)];
+  const nxt=allRows[Math.min(processed,allRows.length-1)];
+
+  document.getElementById('clk-sim').textContent='Lectura actual: '+(cur?cur.timestamp:'—');
+  document.getElementById('clk-count').textContent=n+' lecturas procesadas';
+
+  if(processed>=allRows.length){
+    document.getElementById('clk-next').textContent='Simulación completada';
+  } else if(simStartRealMs&&nxt){
+    const nextCsvMs=csvMs(nxt.timestamp);
+    const realMs=simStartRealMs+(nextCsvMs-simStartCsvMs)/speed;
+    const diffSec=Math.max(0,Math.round((realMs-Date.now())/1000));
+    const m=Math.floor(diffSec/60), s=diffSec%60;
+    document.getElementById('clk-next').textContent=`Próxima lectura en: ${m}m ${s < 10 ? '0'+s : s}s`;
+  } else {
+    document.getElementById('clk-next').textContent='Listo para iniciar';
+  }
+
+  const pct=Math.round(n/Math.max(1,total)*100);
+  document.getElementById('pf').style.width=Math.min(pct,100)+'%';
+  document.getElementById('pl').textContent=(cur?cur.timestamp:'—')+' — '+pct+'%';
+}
+
+// ── LOG ───────────────────────────────────────────────────────────────
+function addLog(type,ts,msg){
+  const el=document.getElementById('log-list');
+  if(el.firstChild&&!el.firstChild.className)el.innerHTML='';
+  const d=document.createElement('div');
+  d.className='log-entry '+type;
+  d.innerHTML=`<span class="le-ts">${ts}</span><span>${msg}</span>`;
+  el.insertBefore(d,el.firstChild);
+  while(el.children.length>50)el.removeChild(el.lastChild);
+}
+
+// ── CONTROLES ─────────────────────────────────────────────────────────
+function getIntervalMs(){return Math.max(200,Math.round(5000/speed));}
+
+function startSim(){
+  if(running||!allRows.length)return;
+  // Buscar en el CSV el índice más cercano a la hora real actual
+  const nowMs=Date.now();
+  const csvStart=csvMs(allRows[0].timestamp);
+  const csvEnd=csvMs(allRows[allRows.length-1].timestamp);
+  if(nowMs>=csvStart&&nowMs<=csvEnd){
+    // La hora actual cae dentro del rango del CSV → buscar fila más cercana
+    let bestIdx=startIdx;
+    for(let i=startIdx;i<allRows.length;i++){
+      if(csvMs(allRows[i].timestamp)<=nowMs) bestIdx=i;
+      else break;
+    }
+    // Procesar silenciosamente las filas entre startIdx y bestIdx (historial reciente)
+    while(processed<=bestIdx) silentStep();
+    startIdx=processed;
+    refreshChart();
+  }
+  // Anclar: tiempo real actual = timestamp CSV de la fila actual
+  simStartRealMs=nowMs;
+  simStartCsvMs=csvMs(allRows[Math.min(processed,allRows.length-1)].timestamp);
+  running=true;
+  document.getElementById('bplay').disabled=true;
+  document.getElementById('bpause').disabled=false;
+  interval=setInterval(step,getIntervalMs());
+  step();
+}
+
+function pauseSim(){
+  clearInterval(interval); running=false;
+  // Al pausar guardamos el progreso para reanudar desde aquí
+  simStartRealMs=null;
+  document.getElementById('bplay').disabled=false;
+  document.getElementById('bpause').disabled=true;
+  document.getElementById('clk-next').textContent='Pausado';
+}
+
+function stopSim(){
+  clearInterval(interval); running=false;
+  document.getElementById('bplay').disabled=true;
+  document.getElementById('bpause').disabled=true;
+  document.getElementById('clk-next').textContent='Simulación completada';
+}
+
+function resetSim(){
+  clearInterval(interval); running=false;
+  simStartRealMs=null; simStartCsvMs=null;
+  processed=0; predictedSensors=new Set(); critSensors=new Set();
+  bufs=Array.from({length:8},()=>({labels:[],vals:[],wa:[],ca:[],pr:[]}));
+  if(chart){chart.data.labels=[];chart.data.datasets.forEach(d=>d.data=[]);chart.update('none');}
+  /*EDIT ANTO
+  ['pred-alert','crit-alert'].forEach(id=>document.getElementById(id).classList.remove('show'));
+  document.getElementById('pred-items').innerHTML='';
+  document.getElementById('pred-days').textContent='—';
+  delete document.getElementById('pred-days').dataset.min;
+  */
+  //AGREGADO
+  document.getElementById('crit-alert').classList.remove('show');
+  //FIN
+  document.getElementById('pf').style.width='0%';
+  document.getElementById('pl').textContent='Reiniciado';
+  document.getElementById('log-list').innerHTML='<div style="font-size:11px;color:var(--text3)">Reiniciado.</div>';
+  document.getElementById('sbadge').className='badge ok';
+  document.getElementById('sbadge').textContent='● SISTEMA NORMAL';
+  document.getElementById('clk-sim').textContent='Lectura actual: —';
+  document.getElementById('clk-next').textContent='Listo para iniciar';
+  document.getElementById('clk-count').textContent='0 lecturas procesadas';
+  for(let i=0;i<8;i++){
+    const v=document.getElementById('cv'+i); if(v){v.textContent='—';v.className='card-val';}
+    const c=document.getElementById('sc'+i); if(c)c.className='card';
+    const t=document.getElementById('ct'+i); if(t)t.textContent='';
+  }
+  document.getElementById('bplay').disabled=false;
+  document.getElementById('bpause').disabled=true;
+  const preload=Math.min(READINGS_PER_DAY*TREND_DAYS,allRows.length-1);
+  for(let i=0;i<preload;i++)silentStep();
+  startIdx=processed;
+  refreshChart(); updateStatusBar();
+}
+
+function chSpd(v){
+  speed=parseInt(v);
+  document.getElementById('sv').textContent=v+'x';
+  if(running){
+    // Re-anclar tiempo para evitar saltos al cambiar velocidad
+    simStartCsvMs=csvMs(allRows[Math.min(processed-1,allRows.length-1)].timestamp);
+    simStartRealMs=Date.now();
+    clearInterval(interval);
+    interval=setInterval(step,getIntervalMs());
+  }
+}
+
+// Actualizar contador de próxima lectura cada segundo
+setInterval(()=>{if(running)updateStatusBar();},1000);
+</script>
+</body>
+</html>
