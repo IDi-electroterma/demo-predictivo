@@ -79,8 +79,11 @@ footer{text-align:center;font-size:11px;color:var(--text3);margin-top:20px;paddi
 </div>
 
 <div class="upload-box" id="upload-box">
-  <p id="upload-msg">Cargando datos del sistema...</p>
-  <div id="upload-detail" style="margin-top:6px;font-size:11px;color:var(--text3)">Buscando CSV en el repositorio</div>
+  <p>Cargá el archivo <strong>mvp_simulacion_14dias.csv</strong> para iniciar</p>
+  <label class="btn primary" style="cursor:pointer;display:inline-block;margin-top:8px">
+    Seleccionar CSV
+    <input type="file" accept=".csv" onchange="manualLoad(this)" style="display:none">
+  </label>
 </div>
 
 <div id="main" style="display:none">
@@ -191,7 +194,7 @@ function parseCSVText(text){
   addLog('normal', allRows[preload-1].timestamp,
     `Historial de ${TREND_DAYS} días precargado (${preload} lecturas · intervalo ${Math.round(1440/READINGS_PER_DAY)} min). Sistema listo.`);
 }
-
+/* EDIT ANTO
 function autoLoadCSV(){
   const base=window.location.href.replace(/[?#].*$/,'').replace(/\/[^/]*$/,'/');
   const url=base+'mvp_simulacion_14dias.csv';
@@ -208,13 +211,16 @@ function autoLoadCSV(){
         `<input type="file" accept=".csv" onchange="manualLoad(this)" style="display:none"></label>`;
     });
 }
+*/
 function manualLoad(input){
   const file=input.files[0]; if(!file)return;
   const r=new FileReader();
   r.onload=e=>parseCSVText(e.target.result);
   r.readAsText(file);
 }
+  /* EDIT ANTO
 window.addEventListener('DOMContentLoaded',autoLoadCSV);
+*/
 
 // ── PRECARGA SILENCIOSA ───────────────────────────────────────────────
 function silentStep(){
